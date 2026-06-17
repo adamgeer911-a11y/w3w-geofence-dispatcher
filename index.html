@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Integrated Dispatcher Lab</title>
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  <style>
+    /* Art direction: emergency dispatch console → authoritative, functional, low-distraction
+       Palette: cool-neutral dark surfaces, teal accent (alert-ready), red/green status
+       Typography: Satoshi (body+UI) — clean, legible under pressure
+       Density: dense */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html {
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+    }
+
+    :root, [data-theme="light"] {
+      --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+      --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+      --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+      --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+      --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+
+      --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+      --space-4: 1rem; --space-5: 1.25rem; --space-6: 1.5rem;
+      --space-8: 2rem; --space-10: 2.5rem; --space-12: 3rem;
+
+      --radius-sm: 0.25rem; --radius-md: 0.5rem;
+      --radius-lg: 0.75rem; --radius-xl: 1rem; --radius-full: 9999px;
+
+      --transition-ui: 160ms cubic-bezier(0.16, 1, 0.3, 1);
+
+      --color-bg:              #f0f2f5;
+      --color-surface:         #ffffff;
+      --color-surface-2:       #f7f8fa;
+      --color-surface-offset:  #eef0f3;
+      --color-border:          oklch(0.5 0 0 / 0.12);
+      --color-divider:         oklch(0.5 0 0 / 0.08);
+
+      --color-text:            #18181b;
+      --color-text-muted:      #52525b;
+      --color-text-faint:      #a1a1aa;
+      --color-text-inverse:    #ffffff;
+
+      --color-primary:         #0891b2;
+      --color-primary-hover:   #0e7490;
+      --color-primary-active:  #155e75;
+      --color-primary-bg:      #e0f2fe;
+      --color-primary-surface: #bae6fd;
+
+      --color-success:         #16a34a;
+      --color-success-bg:      #dcfce7;
+      --color-success-text:    #14532d;
+
+      --color-error:           #dc2626;
+      --color-error-bg:        #fee2e2;
+      --color-error-text:      #7f1d1d;
+
+      --color-warning:         #d97706;
+      --color-warning-bg:      #fef3c7;
+      --color-warning-text:    #78350f;
+
+      --shadow-sm: 0 1px 3px oklch(0.2 0 0 / 0.07), 0 1px 2px oklch(0.2 0 0 / 0.05);
+      --shadow-md: 0 4px 12px oklch(0.2 0 0 / 0.08), 0 2px 4px oklch(0.2 0 0 / 0.05);
+      --shadow-lg: 0 12px 32px oklch(0.2 0 0 / 0.12);
+    }
+
+    [data-theme="dark"] {
+      --color-bg:              #0f1117;
+      --color-surface:         #16181f;
+      --color-surface-2:       #1c1f28;
+      --color-surface-offset:  #22252f;
+      --color-border:          oklch(1 0 0 / 0.09);
+      --color-divider:         oklch(1 0 0 / 0.06);
+
+      --color-text:            #e4e4e7;
+      --color-text-muted:      #a1a1aa;
+      --color-text-faint:      #52525b;
+      --color-text-inverse:    #18181b;
+
+      --color-primary:         #22d3ee;
+      --color-primary-hover:   #67e8f9;
+      --color-primary-active:  #a5f3fc;
+      --color-primary-bg:      #0c3a4a;
+      --color-primary-surface: #164e63;
+
+      --color-success:         #4ade80;
+      --color-success-bg:      #052e16;
+      --color-success-text:    #bbf7d0;
+
+      --color-error:           #f87171;
+      --color-error-bg:        #450a0a;
+      --color-error-text:      #fecaca;
+
+      --color-warning:         #fbbf24;
+      --color-warning-bg:      #451a03;
+      --color-warning-text:    #fde68a;
+
+      --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.3);
+      --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
+      --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) {
+        --color-bg: #0f1117; --color-surface: #16181f; --color-surface-2: #1c1f28;
+        --color-surface-offset: #22252f; --color-border: oklch(1 0 0 / 0.09);
+        --color-divider: oklch(1 0 0 / 0.06); --color-text: #e4e4e7;
+        --color-text-muted: #a1a1aa; --color-text-faint: #52525b;
+        --color-text-inverse: #18181b; --color-primary: #22d3ee;
+        --color-primary-hover: #67e8f9; --color-primary-active: #a5f3fc;
+        --color-primary-bg: #0c3a4a; --color-primary-surface: #164e63;
+        --color-success: #4ade80; --color-success-bg: #052e16; --color-success-text: #bbf7d0;
+        --color-error: #f87171; --color-error-bg: #450a0a; --color-error-text: #fecaca;
+        --color-warning: #fbbf24; --color-warning-bg: #451a03; --color-warning-text: #fde68a;
+        --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.3); --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
+        --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
+      }
+    }
+
+    body {
+      font-family: 'Satoshi', 'Inter', system-ui, sans-serif;
+      font-size: var(--text-sm);
+      color: var(--color-text);
+      background: var(--color-bg);
+      min-height: 100dvh;
+      line-height: 1.5;
+    }
+
+    /* ── App Shell ── */
+    .app-shell { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+
+    /* ── Header ── */
+    .app-header {
+      display: flex; align-items: center; gap: var(--space-4);
+      padding: 0 var(--space-6);
+      height: 52px;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      box-shadow: var(--shadow-sm);
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    .app-logo {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-weight: 700; font-size: var(--text-sm); letter-spacing: -0.01em;
+      color: var(--color-text); text-decoration: none;
+    }
+    .app-logo svg { color: var(--color-primary); flex-shrink: 0; }
+    .header-badge {
+      font-size: var(--text-xs); font-weight: 600; padding: 2px var(--space-2);
+      background: var(--color-primary-bg); color: var(--color-primary);
+      border-radius: var(--radius-full); letter-spacing: 0.03em; text-transform: uppercase;
+    }
+    .header-spacer { flex: 1; }
+    .header-status {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-xs); color: var(--color-text-muted);
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--color-success); flex-shrink: 0;
+      box-shadow: 0 0 0 2px var(--color-success-bg);
+    }
+    .btn-icon {
+      width: 34px; height: 34px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none; cursor: pointer; color: var(--color-text-muted);
+      transition: background var(--transition-ui), color var(--transition-ui);
+    }
+    .btn-icon:hover { background: var(--color-surface-offset); color: var(--color-text); }
+
+    /* ── Main Layout ── */
+    .app-body {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      grid-template-rows: 1fr;
+      flex: 1; overflow: hidden;
+    }
+
+    /* ── Left Panel ── */
+    .left-panel {
+      display: flex; flex-direction: column;
+      background: var(--color-surface);
+      border-right: 1px solid var(--color-border);
+      overflow-y: auto; overflow-x: hidden;
+    }
+    .left-panel::-webkit-scrollbar { width: 4px; }
+    .left-panel::-webkit-scrollbar-track { background: transparent; }
+    .left-panel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+
+    /* ── Sections ── */
+    .panel-section {
+      padding: var(--space-5) var(--space-5) var(--space-4);
+      border-bottom: 1px solid var(--color-divider);
+    }
+    .panel-section:last-child { border-bottom: none; }
+    .section-label {
+      font-size: var(--text-xs); font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--color-text-faint);
+      margin-bottom: var(--space-3);
+    }
+
+    /* ── API Key ── */
+    .field-row { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-3); }
+    .field-label { font-size: var(--text-xs); font-weight: 500; color: var(--color-text-muted); }
+    .field-input {
+      width: 100%; padding: var(--space-2) var(--space-3);
+      background: var(--color-surface-2); border: 1px solid var(--color-border);
+      border-radius: var(--radius-md); font-size: var(--text-xs);
+      color: var(--color-text); font-family: 'Satoshi', monospace;
+      transition: border-color var(--transition-ui), box-shadow var(--transition-ui);
+    }
+    .field-input:focus {
+      outline: none; border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 15%, transparent);
+    }
+    .field-input::placeholder { color: var(--color-text-faint); }
+
+    /* ── Geofence controls ── */
+    .btn-group { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: var(--space-1);
+      padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+      font-size: var(--text-xs); font-weight: 600; cursor: pointer;
+      border: 1px solid transparent;
+      transition: background var(--transition-ui), color var(--transition-ui),
+                  border-color var(--transition-ui), box-shadow var(--transition-ui);
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--color-primary); color: var(--color-text-inverse);
+      border-color: var(--color-primary);
+    }
+    .btn-primary:hover { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+    .btn-secondary {
+      background: var(--color-surface-offset); color: var(--color-text);
+      border-color: var(--color-border);
+    }
+    .btn-secondary:hover { background: var(--color-surface-2); }
+    .btn-danger {
+      background: var(--color-error-bg); color: var(--color-error);
+      border-color: color-mix(in oklch, var(--color-error) 25%, transparent);
+    }
+    .btn-danger:hover { background: color-mix(in oklch, var(--color-error) 20%, transparent); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .geofence-status-row {
+      display: flex; align-items: center; gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-surface-2); border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      margin-top: var(--space-3);
+    }
+    .geofence-status-row .label { font-size: var(--text-xs); color: var(--color-text-muted); flex: 1; }
+    .geofence-status-row .value { font-size: var(--text-xs); font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; }
+
+    /* ── ANI/ALI ── */
+    .textarea-code {
+      width: 100%; padding: var(--space-3);
+      background: var(--color-bg); border: 1px solid var(--color-border);
+      border-radius: var(--radius-md); font-size: 11px; font-family: 'Courier New', monospace;
+      color: var(--color-text); resize: vertical; min-height: 110px; line-height: 1.55;
+      transition: border-color var(--transition-ui);
+    }
+    .textarea-code:focus { outline: none; border-color: var(--color-primary); }
+    .sample-btns { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
+    .btn-chip {
+      font-size: 11px; padding: 2px var(--space-2); border-radius: var(--radius-full);
+      background: var(--color-primary-bg); color: var(--color-primary);
+      border: none; cursor: pointer; font-weight: 600;
+      transition: background var(--transition-ui);
+    }
+    .btn-chip:hover { background: var(--color-primary-surface); }
+
+    /* ── Result Card ── */
+    .result-card {
+      border-radius: var(--radius-lg); border: 1px solid var(--color-border);
+      background: var(--color-surface-2); overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .result-card-header {
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-surface-offset);
+      border-bottom: 1px solid var(--color-divider);
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-xs); font-weight: 700; color: var(--color-text-muted);
+      text-transform: uppercase; letter-spacing: 0.07em;
+    }
+    .result-card-body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+
+    .result-row { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); }
+    .result-key { font-size: var(--text-xs); color: var(--color-text-muted); font-weight: 500; flex-shrink: 0; }
+    .result-val { font-size: var(--text-xs); color: var(--color-text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; word-break: break-all; }
+    .result-val.mono { font-family: 'Courier New', monospace; font-weight: 500; }
+
+    .w3w-words {
+      font-size: var(--text-base); font-weight: 700; color: var(--color-primary);
+      letter-spacing: -0.01em; display: flex; align-items: center; gap: var(--space-1);
+      flex-wrap: wrap;
+    }
+    .w3w-prefix { color: var(--color-error); font-size: var(--text-lg); line-height: 1; }
+
+    .fence-verdict {
+      display: flex; align-items: center; gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm); font-weight: 700;
+    }
+    .fence-verdict.inside {
+      background: var(--color-success-bg); color: var(--color-success-text);
+      border: 1px solid color-mix(in oklch, var(--color-success) 30%, transparent);
+    }
+    .fence-verdict.outside {
+      background: var(--color-error-bg); color: var(--color-error-text);
+      border: 1px solid color-mix(in oklch, var(--color-error) 30%, transparent);
+    }
+    .fence-verdict.pending {
+      background: var(--color-surface-offset); color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+    }
+    .verdict-icon { font-size: 1.1em; }
+
+    /* ── Word Grid ── */
+    .word-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: var(--space-1); max-height: 160px; overflow-y: auto;
+    }
+    .word-chip {
+      font-size: 10px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm);
+      background: var(--color-primary-bg); color: var(--color-primary);
+      font-family: 'Courier New', monospace; font-weight: 600; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; border: none;
+      cursor: default; text-align: left;
+    }
+    .word-grid::-webkit-scrollbar { width: 3px; }
+    .word-grid::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+
+    /* ── Event Log ── */
+    .event-log { display: flex; flex-direction: column; gap: 0; max-height: 180px; overflow-y: auto; }
+    .event-log::-webkit-scrollbar { width: 3px; }
+    .event-log::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+    .event-entry {
+      display: grid; grid-template-columns: 62px 1fr;
+      gap: var(--space-2); padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--color-divider); align-items: start;
+    }
+    .event-entry:last-child { border-bottom: none; }
+    .event-time { font-size: 10px; font-family: 'Courier New', monospace; color: var(--color-text-faint); padding-top: 1px; }
+    .event-msg { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.4; }
+    .event-msg strong { color: var(--color-text); font-weight: 600; }
+    .event-msg .tag-inside { color: var(--color-success); font-weight: 700; }
+    .event-msg .tag-outside { color: var(--color-error); font-weight: 700; }
+
+    /* ── Map ── */
+    .map-panel { position: relative; display: flex; flex-direction: column; overflow: hidden; }
+    #map { flex: 1; }
+    .map-overlay-top {
+      position: absolute; top: var(--space-3); right: var(--space-3);
+      display: flex; flex-direction: column; gap: var(--space-2); z-index: 500; pointer-events: none;
+    }
+    .map-pill {
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: var(--radius-full); padding: var(--space-1) var(--space-3);
+      font-size: var(--text-xs); font-weight: 600; color: var(--color-text);
+      box-shadow: var(--shadow-md); white-space: nowrap; pointer-events: auto;
+      display: flex; align-items: center; gap: var(--space-2);
+    }
+    .map-pill .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .map-pill .dot.active { background: var(--color-success); }
+    .map-pill .dot.inactive { background: var(--color-text-faint); }
+
+    /* ── Empty states ── */
+    .empty-hint {
+      padding: var(--space-4) var(--space-3); text-align: center;
+      color: var(--color-text-faint); font-size: var(--text-xs);
+      border: 1px dashed var(--color-border); border-radius: var(--radius-md);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .app-body { grid-template-columns: 1fr; grid-template-rows: auto 400px; }
+      .left-panel { overflow-y: auto; border-right: none; border-bottom: 1px solid var(--color-border); }
+    }
+
+    a, button, input, textarea, select {
+      transition: color var(--transition-ui), background var(--transition-ui),
+                  border-color var(--transition-ui), box-shadow var(--transition-ui);
+    }
+    :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+    /* Leaflet draw toolbar polish */
+    .leaflet-draw-toolbar a { border-radius: var(--radius-sm) !important; }
+    .leaflet-touch .leaflet-draw-toolbar a { width: 30px !important; height: 30px !important; line-height: 30px !important; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Header -->
+  <header class="app-header">
+    <a class="app-logo" href="#" aria-label="W3W Dispatcher">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 11l19-9-9 19-2-8-8-2z"/>
+      </svg>
+      W3W Dispatcher
+    </a>
+    <span class="header-badge">Lab</span>
+    <div class="header-spacer"></div>
+    <div class="header-status">
+      <span class="status-dot"></span>
+      <span id="hdr-fence-status">No fence</span>
+    </div>
+    <button class="btn-icon" data-theme-toggle aria-label="Toggle dark mode">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </header>
+
+  <!-- Body -->
+  <div class="app-body">
+
+    <!-- Left panel -->
+    <aside class="left-panel" aria-label="Controls">
+
+      <!-- API Key -->
+      <div class="panel-section">
+        <div class="section-label">what3words API</div>
+        <div class="field-row">
+          <label class="field-label" for="apiKey">API Key</label>
+          <input id="apiKey" class="field-input" type="password" placeholder="Paste your W3W API key…" autocomplete="off" spellcheck="false"/>
+        </div>
+      </div>
+
+      <!-- Geofence -->
+      <div class="panel-section">
+        <div class="section-label">Geofence</div>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btnRect">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+            Rectangle
+          </button>
+          <button class="btn btn-primary" id="btnPoly">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 22 20 2 20"/></svg>
+            Polygon
+          </button>
+          <button class="btn btn-danger" id="btnClearFence">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Clear
+          </button>
+        </div>
+        <div class="geofence-status-row">
+          <span class="label">Status</span>
+          <span class="value" id="fenceStatusText">Not set</span>
+        </div>
+        <div id="wordListSection" style="margin-top:var(--space-3); display:none;">
+          <div class="section-label" style="margin-bottom:var(--space-2);">W3W cells in fence</div>
+          <div id="wordGrid" class="word-grid"></div>
+          <div id="wordListMsg" style="margin-top:var(--space-2); font-size:10px; color:var(--color-text-faint);"></div>
+        </div>
+      </div>
+
+      <!-- ANI/ALI -->
+      <div class="panel-section">
+        <div class="section-label">ANI / ALI Payload</div>
+        <textarea id="aliPayload" class="textarea-code" spellcheck="false" placeholder="Paste mock ANI/ALI data here…"></textarea>
+        <div class="sample-btns">
+          <button class="btn-chip" data-sample="inside">Sample: Inside</button>
+          <button class="btn-chip" data-sample="outside">Sample: Outside</button>
+          <button class="btn-chip" data-sample="e911">Sample: E911</button>
+        </div>
+        <div style="margin-top:var(--space-3);">
+          <button class="btn btn-primary" id="btnProcess" style="width:100%; justify-content:center;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Process Payload
+          </button>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="panel-section" id="resultSection">
+        <div class="section-label">Last Result</div>
+        <div id="resultEmpty" class="empty-hint">Process a payload to see results</div>
+        <div id="resultCard" class="result-card" style="display:none;">
+          <div class="result-card-header">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+            Decoded Location
+          </div>
+          <div class="result-card-body">
+            <div class="result-row">
+              <span class="result-key">Coordinates</span>
+              <span class="result-val mono" id="rCoords">—</span>
+            </div>
+            <div class="result-row">
+              <span class="result-key">ANI</span>
+              <span class="result-val" id="rANI">—</span>
+            </div>
+            <div class="result-row">
+              <span class="result-key">Address</span>
+              <span class="result-val" id="rAddr">—</span>
+            </div>
+            <div>
+              <div class="result-key" style="margin-bottom:var(--space-2);">what3words</div>
+              <div class="w3w-words" id="rW3W">
+                <span class="w3w-prefix">//</span><span id="rW3WText">—</span>
+              </div>
+            </div>
+            <div id="rVerdict" class="fence-verdict pending">
+              <span class="verdict-icon">⬡</span>
+              <span id="rVerdictText">Draw a geofence to check</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Event Log -->
+      <div class="panel-section">
+        <div class="section-label">Event Log</div>
+        <div id="eventLog" class="event-log">
+          <div class="empty-hint">No events yet</div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Map panel -->
+    <main class="map-panel">
+      <div id="map"></div>
+      <div class="map-overlay-top">
+        <div class="map-pill">
+          <span class="dot" id="fenceDot" style="background:var(--color-text-faint)"></span>
+          <span id="mapFenceLabel">No geofence</span>
+        </div>
+        <div class="map-pill" id="mapPinPill" style="display:none;">
+          <span class="dot active"></span>
+          <span id="mapPinLabel">Pin dropped</span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ── Theme toggle ──
+  const themeToggle = document.querySelector('[data-theme-toggle]');
+  const root = document.documentElement;
+  let theme = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  root.setAttribute('data-theme', theme);
+  function setToggleIcon() {
+    themeToggle.innerHTML = theme === 'dark'
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  }
+  setToggleIcon();
+  themeToggle.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', theme);
+    setToggleIcon();
+  });
+
+  // ── Map init ──
+  const map = L.map('map').setView([35.07, -85.25], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    maxZoom: 19
+  }).addTo(map);
+
+  const drawnItems = new L.FeatureGroup().addTo(map);
+  const drawControl = new L.Control.Draw({
+    edit: { featureGroup: drawnItems, remove: false },
+    draw: {
+      rectangle: { shapeOptions: { color: '#0891b2', weight: 2, fillOpacity: 0.08 } },
+      polygon: { shapeOptions: { color: '#0891b2', weight: 2, fillOpacity: 0.08 } },
+      circle: false, circlemarker: false, marker: false, polyline: false
+    }
+  });
+  map.addControl(drawControl);
+
+  let currentFence = null;
+  let currentPin = null;
+  let drawingMode = null;
+  let logEntries = [];
+
+  // ── Draw buttons ──
+  document.getElementById('btnRect').addEventListener('click', () => {
+    drawingMode = 'rect';
+    new L.Draw.Rectangle(map, drawControl.options.draw.rectangle).enable();
+  });
+  document.getElementById('btnPoly').addEventListener('click', () => {
+    drawingMode = 'poly';
+    new L.Draw.Polygon(map, drawControl.options.draw.polygon).enable();
+  });
+
+  map.on(L.Draw.Event.CREATED, e => {
+    drawnItems.clearLayers();
+    if (currentPin) { map.removeLayer(currentPin); currentPin = null; }
+    currentFence = e.layer;
+    drawnItems.addLayer(currentFence);
+    updateFenceUI(true);
+    logEvent('Geofence drawn', `Type: <strong>${e.layerType}</strong>`);
+    if (document.getElementById('apiKey').value.trim()) fetchWordGrid();
+  });
+
+  document.getElementById('btnClearFence').addEventListener('click', () => {
+    drawnItems.clearLayers();
+    currentFence = null;
+    if (currentPin) { map.removeLayer(currentPin); currentPin = null; }
+    updateFenceUI(false);
+    document.getElementById('wordListSection').style.display = 'none';
+    document.getElementById('rVerdict').className = 'fence-verdict pending';
+    document.getElementById('rVerdictText').textContent = 'Draw a geofence to check';
+    logEvent('Fence cleared', 'Geofence removed');
+  });
+
+  function updateFenceUI(active) {
+    const label = active ? 'Fence active' : 'No geofence';
+    document.getElementById('fenceStatusText').textContent = active ? 'Active' : 'Not set';
+    document.getElementById('hdr-fence-status').textContent = label;
+    document.getElementById('fenceDot').style.background = active ? 'var(--color-success)' : 'var(--color-text-faint)';
+    document.getElementById('mapFenceLabel').textContent = label;
+  }
+
+  // ── Word grid ──
+  async function fetchWordGrid() {
+    const key = document.getElementById('apiKey').value.trim();
+    if (!key || !currentFence) return;
+    const bounds = currentFence.getBounds ? currentFence.getBounds() : L.featureGroup([currentFence]).getBounds();
+    const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+    const latRange = Math.abs(ne.lat - sw.lat);
+    const lngRange = Math.abs(ne.lng - sw.lng);
+    const approxCells = Math.round((latRange / 0.000027) * (lngRange / 0.000036));
+    if (approxCells > 500) {
+      document.getElementById('wordListSection').style.display = 'block';
+      document.getElementById('wordGrid').innerHTML = '';
+      document.getElementById('wordListMsg').textContent = `Fence too large (~${approxCells.toLocaleString()} cells). Zoom in for cell listing.`;
+      return;
+    }
+    const step = 0.000027;
+    const words = [];
+    const wg = document.getElementById('wordGrid');
+    wg.innerHTML = '<div style="color:var(--color-text-faint);font-size:10px;padding:4px;">Fetching cells…</div>';
+    document.getElementById('wordListSection').style.display = 'block';
+    for (let lat = sw.lat; lat <= ne.lat && words.length < 300; lat += step) {
+      for (let lng = sw.lng; lng <= ne.lng && words.length < 300; lng += step) {
+        const latR = Math.round(lat * 1e6) / 1e6;
+        const lngR = Math.round(lng * 1e6) / 1e6;
+        try {
+          const res = await fetch(`https://api.what3words.com/v3/convert-to-3wa?coordinates=${latR}%2C${lngR}&key=${key}`);
+          const data = await res.json();
+          if (data.words) words.push(data.words);
+        } catch(e) {}
+      }
+    }
+    wg.innerHTML = '';
+    if (!words.length) {
+      wg.innerHTML = '<div class="empty-hint">No cells returned. Check API key.</div>';
+    } else {
+      words.forEach(w => {
+        const el = document.createElement('div');
+        el.className = 'word-chip'; el.title = '///' + w; el.textContent = '///' + w;
+        wg.appendChild(el);
+      });
+      document.getElementById('wordListMsg').textContent = `${words.length} cells shown`;
+    }
+  }
+
+  // ── Sample payloads ──
+  const samples = {
+    inside: `ANI: +14235550101\nALI_LAT: 35.0700\nALI_LON: -85.2500\nADDRESS: 123 Main St, Chattanooga TN 37402\nCALL_TYPE: 911\nTIMESTAMP: ${new Date().toISOString()}`,
+    outside: `ANI: +14235550202\nALI_LAT: 35.1100\nALI_LON: -85.3000\nADDRESS: 456 Ridge Rd, Chattanooga TN 37411\nCALL_TYPE: 911\nTIMESTAMP: ${new Date().toISOString()}`,
+    e911: `MSAG_COMMUNITY: JASPER\nANI: +14235559911\nLAT: 35.0726\nLON: -85.2601\nCONFIDENCE: 8\nSTREET: 789 Oak Ave\nCITY: Jasper\nSTATE: TN\nZIP: 37347\nCALL_TIME: ${new Date().toISOString()}`
+  };
+  document.querySelectorAll('[data-sample]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('aliPayload').value = samples[btn.dataset.sample];
+    });
+  });
+
+  // ── Parse payload ──
+  function parsePayload(text) {
+    const latMatch = text.match(/(?:ALI_LAT|LAT)\s*[=:]\s*([-\d.]+)/i);
+    const lonMatch = text.match(/(?:ALI_LON|LON)\s*[=:]\s*([-\d.]+)/i);
+    const aniMatch = text.match(/ANI\s*[=:]\s*([^\n]+)/i);
+    const addrMatch = text.match(/(?:ADDRESS|STREET)\s*[=:]\s*([^\n]+)/i);
+    return {
+      lat: latMatch ? parseFloat(latMatch[1]) : null,
+      lon: lonMatch ? parseFloat(lonMatch[1]) : null,
+      ani: aniMatch ? aniMatch[1].trim() : 'Unknown',
+      address: addrMatch ? addrMatch[1].trim() : 'Not provided'
+    };
+  }
+
+  // ── Point-in-polygon ──
+  function pointInFence(lat, lng) {
+    if (!currentFence) return null;
+    if (currentFence.getBounds) {
+      const b = currentFence.getBounds();
+      if (b.contains && b.contains([lat, lng])) {
+        if (currentFence.getLatLngs) {
+          return pointInPolygon({ lat, lng }, currentFence.getLatLngs()[0]);
+        }
+        return true;
+      }
+      return false;
+    }
+    return null;
+  }
+
+  function pointInPolygon(pt, poly) {
+    let inside = false;
+    const pts = poly.map ? poly : Array.from(poly);
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const xi = pts[i].lat, yi = pts[i].lng;
+      const xj = pts[j].lat, yj = pts[j].lng;
+      const intersect = ((yi > pt.lng) !== (yj > pt.lng)) && (pt.lat < (xj - xi) * (pt.lng - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  // ── Process ──
+  document.getElementById('btnProcess').addEventListener('click', async () => {
+    const text = document.getElementById('aliPayload').value.trim();
+    if (!text) { logEvent('Error', 'No payload entered'); return; }
+    const parsed = parsePayload(text);
+    if (!parsed.lat || !parsed.lon) { logEvent('Parse error', 'Could not extract coordinates'); return; }
+
+    // Drop pin
+    if (currentPin) map.removeLayer(currentPin);
+    const pinIcon = L.divIcon({
+      className: '', iconSize: [24, 36], iconAnchor: [12, 36],
+      html: `<svg width="24" height="36" viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24C24 5.37 18.63 0 12 0z" fill="#dc2626"/>
+        <circle cx="12" cy="12" r="5" fill="white"/>
+      </svg>`
+    });
+    currentPin = L.marker([parsed.lat, parsed.lon], { icon: pinIcon }).addTo(map);
+    map.setView([parsed.lat, parsed.lon], 16);
+
+    document.getElementById('mapPinPill').style.display = 'flex';
+    document.getElementById('mapPinLabel').textContent = `${parsed.lat.toFixed(5)}, ${parsed.lon.toFixed(5)}`;
+
+    // W3W lookup
+    let w3wText = '—';
+    const key = document.getElementById('apiKey').value.trim();
+    if (key) {
+      try {
+        const res = await fetch(`https://api.what3words.com/v3/convert-to-3wa?coordinates=${parsed.lat}%2C${parsed.lon}&key=${key}`);
+        const data = await res.json();
+        if (data.words) w3wText = data.words;
+        else if (data.error) w3wText = `Error: ${data.error.message}`;
+      } catch(e) { w3wText = 'Network error'; }
+    } else {
+      w3wText = 'No API key';
+    }
+
+    // Fence check
+    const inside = pointInFence(parsed.lat, parsed.lon);
+    const verdictEl = document.getElementById('rVerdict');
+    const verdictTxt = document.getElementById('rVerdictText');
+    if (inside === null) {
+      verdictEl.className = 'fence-verdict pending';
+      verdictEl.querySelector('.verdict-icon').textContent = '⬡';
+      verdictTxt.textContent = 'No geofence drawn';
+    } else if (inside) {
+      verdictEl.className = 'fence-verdict inside';
+      verdictEl.querySelector('.verdict-icon').textContent = '✓';
+      verdictTxt.textContent = 'Inside geofence';
+      currentPin.bindPopup('<b style="color:#16a34a">✓ Inside geofence</b><br>' + w3wText).openPopup();
+    } else {
+      verdictEl.className = 'fence-verdict outside';
+      verdictEl.querySelector('.verdict-icon').textContent = '✕';
+      verdictTxt.textContent = 'Outside geofence';
+      currentPin.bindPopup('<b style="color:#dc2626">✕ Outside geofence</b><br>' + w3wText).openPopup();
+    }
+
+    // Update result card
+    document.getElementById('resultEmpty').style.display = 'none';
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('rCoords').textContent = `${parsed.lat}, ${parsed.lon}`;
+    document.getElementById('rANI').textContent = parsed.ani;
+    document.getElementById('rAddr').textContent = parsed.address;
+    document.getElementById('rW3WText').textContent = w3wText !== '—' ? w3wText : '—';
+
+    const verdict = inside === null ? 'No fence' : inside ? '✓ INSIDE' : '✕ OUTSIDE';
+    const tagClass = inside === null ? '' : inside ? 'tag-inside' : 'tag-outside';
+    logEvent('Payload processed', `ANI <strong>${parsed.ani}</strong> → <strong>${parsed.lat.toFixed(5)}, ${parsed.lon.toFixed(5)}</strong> → <span class="${tagClass}">${verdict}</span>`);
+  });
+
+  // ── Log ──
+  function logEvent(title, detail) {
+    const now = new Date();
+    const time = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    logEntries.unshift({ time, title, detail });
+    renderLog();
+  }
+  function renderLog() {
+    const el = document.getElementById('eventLog');
+    if (!logEntries.length) { el.innerHTML = '<div class="empty-hint">No events yet</div>'; return; }
+    el.innerHTML = logEntries.slice(0, 30).map(e => `
+      <div class="event-entry">
+        <span class="event-time">${e.time}</span>
+        <span class="event-msg"><strong>${e.title}</strong> — ${e.detail}</span>
+      </div>`).join('');
+  }
+
+  logEvent('App ready', 'Draw a geofence, then process an ANI/ALI payload');
+})();
+</script>
+</body>
+</html>
