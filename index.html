@@ -1,819 +1,1114 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Integrated Dispatcher Lab</title>
-  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-  <style>
-    /* Art direction: emergency dispatch console → authoritative, functional, low-distraction
-       Palette: cool-neutral dark surfaces, teal accent (alert-ready), red/green status
-       Typography: Satoshi (body+UI) — clean, legible under pressure
-       Density: dense */
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W3W Geofence Dispatcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<style>
+/* ===================== DESIGN TOKENS ===================== */
+:root {
+  --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
+  --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
+  --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
+  --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
+  --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+  --space-1:0.25rem;--space-2:0.5rem;--space-3:0.75rem;--space-4:1rem;
+  --space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;--space-10:2.5rem;
+  --space-12:3rem;--space-16:4rem;
+  --radius-sm:0.375rem;--radius-md:0.5rem;--radius-lg:0.75rem;--radius-xl:1rem;--radius-full:9999px;
+  --transition-interactive:180ms cubic-bezier(0.16,1,0.3,1);
+  --font-body:'Inter','Helvetica Neue',sans-serif;
+  --font-mono:'JetBrains Mono','Fira Code',monospace;
+}
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html {
-      -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
-      scroll-behavior: smooth;
-    }
+/* Dark theme (default for dispatch console) */
+:root,[data-theme="dark"] {
+  --color-bg:#0f1117;
+  --color-surface:#161b22;
+  --color-surface-2:#1c2128;
+  --color-surface-offset:#21262d;
+  --color-surface-dynamic:#2d333b;
+  --color-divider:#30363d;
+  --color-border:#3d444d;
+  --color-text:#e6edf3;
+  --color-text-muted:#848d97;
+  --color-text-faint:#484f58;
+  --color-text-inverse:#0f1117;
+  --color-primary:#2f81f7;
+  --color-primary-hover:#388bfd;
+  --color-primary-active:#1f6feb;
+  --color-primary-highlight:#1f3d5c;
+  --color-success:#3fb950;
+  --color-success-hover:#46c757;
+  --color-success-highlight:#0f2d13;
+  --color-error:#f85149;
+  --color-error-hover:#ff6b62;
+  --color-error-highlight:#3b1217;
+  --color-warning:#d29922;
+  --color-warning-hover:#e3b341;
+  --color-warning-highlight:#3d2f00;
+  --color-orange:#f0883e;
+  --color-orange-highlight:#3d1f00;
+  --shadow-sm:0 1px 3px oklch(0 0 0 / 0.3);
+  --shadow-md:0 4px 12px oklch(0 0 0 / 0.4);
+  --shadow-lg:0 12px 32px oklch(0 0 0 / 0.5);
+}
 
-    :root, [data-theme="light"] {
-      --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
-      --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
-      --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
-      --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
-      --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+[data-theme="light"] {
+  --color-bg:#f6f8fa;
+  --color-surface:#ffffff;
+  --color-surface-2:#f6f8fa;
+  --color-surface-offset:#eaeef2;
+  --color-surface-dynamic:#d0d7de;
+  --color-divider:#d0d7de;
+  --color-border:#d0d7de;
+  --color-text:#1f2328;
+  --color-text-muted:#656d76;
+  --color-text-faint:#9198a1;
+  --color-text-inverse:#ffffff;
+  --color-primary:#0969da;
+  --color-primary-hover:#0860ca;
+  --color-primary-active:#0757ba;
+  --color-primary-highlight:#dbeafe;
+  --color-success:#1a7f37;
+  --color-success-hover:#178038;
+  --color-success-highlight:#dafbe1;
+  --color-error:#d1242f;
+  --color-error-hover:#cf222e;
+  --color-error-highlight:#ffebe9;
+  --color-warning:#9a6700;
+  --color-warning-hover:#8a5e00;
+  --color-warning-highlight:#fff8c5;
+  --color-orange:#bc4c00;
+  --color-orange-highlight:#fff1e5;
+  --shadow-sm:0 1px 3px oklch(0.2 0.01 240 / 0.08);
+  --shadow-md:0 4px 12px oklch(0.2 0.01 240 / 0.10);
+  --shadow-lg:0 12px 32px oklch(0.2 0.01 240 / 0.14);
+}
 
-      --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
-      --space-4: 1rem; --space-5: 1.25rem; --space-6: 1.5rem;
-      --space-8: 2rem; --space-10: 2.5rem; --space-12: 3rem;
+/* ===================== RESET ===================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;scroll-behavior:smooth;}
+body{min-height:100dvh;font-family:var(--font-body);font-size:var(--text-sm);color:var(--color-text);background:var(--color-bg);line-height:1.5;}
+img,svg{display:block;max-width:100%;}
+input,button,textarea,select{font:inherit;color:inherit;}
+button{cursor:pointer;background:none;border:none;}
+:focus-visible{outline:2px solid var(--color-primary);outline-offset:3px;border-radius:var(--radius-sm);}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
 
-      --radius-sm: 0.25rem; --radius-md: 0.5rem;
-      --radius-lg: 0.75rem; --radius-xl: 1rem; --radius-full: 9999px;
+/* ===================== LAYOUT ===================== */
+.app-shell {
+  display: grid;
+  grid-template-rows: 52px 1fr;
+  height: 100dvh;
+  overflow: hidden;
+}
 
-      --transition-ui: 160ms cubic-bezier(0.16, 1, 0.3, 1);
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-6);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  z-index: 100;
+}
 
-      --color-bg:              #f0f2f5;
-      --color-surface:         #ffffff;
-      --color-surface-2:       #f7f8fa;
-      --color-surface-offset:  #eef0f3;
-      --color-border:          oklch(0.5 0 0 / 0.12);
-      --color-divider:         oklch(0.5 0 0 / 0.08);
+.logo-mark {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.logo-mark svg { color: var(--color-primary); }
+.logo-text {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+.logo-text span { color: var(--color-text-muted); font-weight: 400; }
 
-      --color-text:            #18181b;
-      --color-text-muted:      #52525b;
-      --color-text-faint:      #a1a1aa;
-      --color-text-inverse:    #ffffff;
+.topbar-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
 
-      --color-primary:         #0891b2;
-      --color-primary-hover:   #0e7490;
-      --color-primary-active:  #155e75;
-      --color-primary-bg:      #e0f2fe;
-      --color-primary-surface: #bae6fd;
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-faint);
+  flex-shrink: 0;
+  transition: background var(--transition-interactive);
+}
+.status-dot.active { background: var(--color-success); box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-success) 20%, transparent); }
+.status-dot.alert  { background: var(--color-error);   box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-error)   20%, transparent); }
 
-      --color-success:         #16a34a;
-      --color-success-bg:      #dcfce7;
-      --color-success-text:    #14532d;
+.status-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
 
-      --color-error:           #dc2626;
-      --color-error-bg:        #fee2e2;
-      --color-error-text:      #7f1d1d;
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--space-3); }
 
-      --color-warning:         #d97706;
-      --color-warning-bg:      #fef3c7;
-      --color-warning-text:    #78350f;
+.btn-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  transition: background var(--transition-interactive), color var(--transition-interactive);
+}
+.btn-icon:hover { background: var(--color-surface-offset); color: var(--color-text); }
 
-      --shadow-sm: 0 1px 3px oklch(0.2 0 0 / 0.07), 0 1px 2px oklch(0.2 0 0 / 0.05);
-      --shadow-md: 0 4px 12px oklch(0.2 0 0 / 0.08), 0 2px 4px oklch(0.2 0 0 / 0.05);
-      --shadow-lg: 0 12px 32px oklch(0.2 0 0 / 0.12);
-    }
+/* ===================== MAIN CONTENT ===================== */
+.main-content {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  overflow: hidden;
+}
 
-    [data-theme="dark"] {
-      --color-bg:              #0f1117;
-      --color-surface:         #16181f;
-      --color-surface-2:       #1c1f28;
-      --color-surface-offset:  #22252f;
-      --color-border:          oklch(1 0 0 / 0.09);
-      --color-divider:         oklch(1 0 0 / 0.06);
+/* ===================== SIDEBAR ===================== */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 
-      --color-text:            #e4e4e7;
-      --color-text-muted:      #a1a1aa;
-      --color-text-faint:      #52525b;
-      --color-text-inverse:    #18181b;
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
 
-      --color-primary:         #22d3ee;
-      --color-primary-hover:   #67e8f9;
-      --color-primary-active:  #a5f3fc;
-      --color-primary-bg:      #0c3a4a;
-      --color-primary-surface: #164e63;
+.sidebar-section {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-divider);
+}
 
-      --color-success:         #4ade80;
-      --color-success-bg:      #052e16;
-      --color-success-text:    #bbf7d0;
+.section-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  margin-bottom: var(--space-3);
+}
 
-      --color-error:           #f87171;
-      --color-error-bg:        #450a0a;
-      --color-error-text:      #fecaca;
+/* API Key */
+.input-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.input-field {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-offset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  transition: border-color var(--transition-interactive), box-shadow var(--transition-interactive);
+}
+.input-field::placeholder { color: var(--color-text-faint); }
+.input-field:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 15%, transparent); }
 
-      --color-warning:         #fbbf24;
-      --color-warning-bg:      #451a03;
-      --color-warning-text:    #fde68a;
+.textarea-field {
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--color-surface-offset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  resize: vertical;
+  min-height: 110px;
+  line-height: 1.6;
+  transition: border-color var(--transition-interactive), box-shadow var(--transition-interactive);
+}
+.textarea-field::placeholder { color: var(--color-text-faint); }
+.textarea-field:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 15%, transparent); }
 
-      --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.3);
-      --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
-      --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
-    }
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  transition: background var(--transition-interactive), color var(--transition-interactive), box-shadow var(--transition-interactive);
+  white-space: nowrap;
+}
 
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme]) {
-        --color-bg: #0f1117; --color-surface: #16181f; --color-surface-2: #1c1f28;
-        --color-surface-offset: #22252f; --color-border: oklch(1 0 0 / 0.09);
-        --color-divider: oklch(1 0 0 / 0.06); --color-text: #e4e4e7;
-        --color-text-muted: #a1a1aa; --color-text-faint: #52525b;
-        --color-text-inverse: #18181b; --color-primary: #22d3ee;
-        --color-primary-hover: #67e8f9; --color-primary-active: #a5f3fc;
-        --color-primary-bg: #0c3a4a; --color-primary-surface: #164e63;
-        --color-success: #4ade80; --color-success-bg: #052e16; --color-success-text: #bbf7d0;
-        --color-error: #f87171; --color-error-bg: #450a0a; --color-error-text: #fecaca;
-        --color-warning: #fbbf24; --color-warning-bg: #451a03; --color-warning-text: #fde68a;
-        --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.3); --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
-        --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
-      }
-    }
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+  border: 1px solid color-mix(in oklch, var(--color-primary) 80%, black);
+}
+.btn-primary:hover { background: var(--color-primary-hover); }
+.btn-primary:active { background: var(--color-primary-active); }
 
-    body {
-      font-family: 'Satoshi', 'Inter', system-ui, sans-serif;
-      font-size: var(--text-sm);
-      color: var(--color-text);
-      background: var(--color-bg);
-      min-height: 100dvh;
-      line-height: 1.5;
-    }
+.btn-secondary {
+  background: var(--color-surface-offset);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+.btn-secondary:hover { background: var(--color-surface-dynamic); }
 
-    /* ── App Shell ── */
-    .app-shell { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid transparent;
+}
+.btn-ghost:hover { background: var(--color-surface-offset); color: var(--color-text); }
 
-    /* ── Header ── */
-    .app-header {
-      display: flex; align-items: center; gap: var(--space-4);
-      padding: 0 var(--space-6);
-      height: 52px;
-      background: var(--color-surface);
-      border-bottom: 1px solid var(--color-border);
-      box-shadow: var(--shadow-sm);
-      flex-shrink: 0;
-      z-index: 100;
-    }
-    .app-logo {
-      display: flex; align-items: center; gap: var(--space-2);
-      font-weight: 700; font-size: var(--text-sm); letter-spacing: -0.01em;
-      color: var(--color-text); text-decoration: none;
-    }
-    .app-logo svg { color: var(--color-primary); flex-shrink: 0; }
-    .header-badge {
-      font-size: var(--text-xs); font-weight: 600; padding: 2px var(--space-2);
-      background: var(--color-primary-bg); color: var(--color-primary);
-      border-radius: var(--radius-full); letter-spacing: 0.03em; text-transform: uppercase;
-    }
-    .header-spacer { flex: 1; }
-    .header-status {
-      display: flex; align-items: center; gap: var(--space-2);
-      font-size: var(--text-xs); color: var(--color-text-muted);
-    }
-    .status-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--color-success); flex-shrink: 0;
-      box-shadow: 0 0 0 2px var(--color-success-bg);
-    }
-    .btn-icon {
-      width: 34px; height: 34px; border-radius: var(--radius-md);
-      display: flex; align-items: center; justify-content: center;
-      background: none; border: none; cursor: pointer; color: var(--color-text-muted);
-      transition: background var(--transition-ui), color var(--transition-ui);
-    }
-    .btn-icon:hover { background: var(--color-surface-offset); color: var(--color-text); }
+.btn-danger {
+  background: transparent;
+  color: var(--color-error);
+  border: 1px solid color-mix(in oklch, var(--color-error) 30%, transparent);
+}
+.btn-danger:hover { background: var(--color-error-highlight); }
 
-    /* ── Main Layout ── */
-    .app-body {
-      display: grid;
-      grid-template-columns: 340px 1fr;
-      grid-template-rows: 1fr;
-      flex: 1; overflow: hidden;
-    }
+.btn-sm { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
+.btn-full { width: 100%; justify-content: center; }
 
-    /* ── Left Panel ── */
-    .left-panel {
-      display: flex; flex-direction: column;
-      background: var(--color-surface);
-      border-right: 1px solid var(--color-border);
-      overflow-y: auto; overflow-x: hidden;
-    }
-    .left-panel::-webkit-scrollbar { width: 4px; }
-    .left-panel::-webkit-scrollbar-track { background: transparent; }
-    .left-panel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+/* Button row */
+.btn-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
 
-    /* ── Sections ── */
-    .panel-section {
-      padding: var(--space-5) var(--space-5) var(--space-4);
-      border-bottom: 1px solid var(--color-divider);
-    }
-    .panel-section:last-child { border-bottom: none; }
-    .section-label {
-      font-size: var(--text-xs); font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.08em; color: var(--color-text-faint);
-      margin-bottom: var(--space-3);
-    }
+/* Geofence tools */
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 
-    /* ── API Key ── */
-    .field-row { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-3); }
-    .field-label { font-size: var(--text-xs); font-weight: 500; color: var(--color-text-muted); }
-    .field-input {
-      width: 100%; padding: var(--space-2) var(--space-3);
-      background: var(--color-surface-2); border: 1px solid var(--color-border);
-      border-radius: var(--radius-md); font-size: var(--text-xs);
-      color: var(--color-text); font-family: 'Satoshi', monospace;
-      transition: border-color var(--transition-ui), box-shadow var(--transition-ui);
-    }
-    .field-input:focus {
-      outline: none; border-color: var(--color-primary);
-      box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 15%, transparent);
-    }
-    .field-input::placeholder { color: var(--color-text-faint); }
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-offset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  transition: background var(--transition-interactive), color var(--transition-interactive), border-color var(--transition-interactive);
+}
+.tool-btn:hover { background: var(--color-surface-dynamic); color: var(--color-text); border-color: var(--color-primary); }
+.tool-btn.active { background: var(--color-primary-highlight); color: var(--color-primary); border-color: var(--color-primary); }
+.tool-btn svg { flex-shrink: 0; }
 
-    /* ── Geofence controls ── */
-    .btn-group { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-    .btn {
-      display: inline-flex; align-items: center; gap: var(--space-1);
-      padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
-      font-size: var(--text-xs); font-weight: 600; cursor: pointer;
-      border: 1px solid transparent;
-      transition: background var(--transition-ui), color var(--transition-ui),
-                  border-color var(--transition-ui), box-shadow var(--transition-ui);
-      white-space: nowrap;
-    }
-    .btn-primary {
-      background: var(--color-primary); color: var(--color-text-inverse);
-      border-color: var(--color-primary);
-    }
-    .btn-primary:hover { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
-    .btn-secondary {
-      background: var(--color-surface-offset); color: var(--color-text);
-      border-color: var(--color-border);
-    }
-    .btn-secondary:hover { background: var(--color-surface-2); }
-    .btn-danger {
-      background: var(--color-error-bg); color: var(--color-error);
-      border-color: color-mix(in oklch, var(--color-error) 25%, transparent);
-    }
-    .btn-danger:hover { background: color-mix(in oklch, var(--color-error) 20%, transparent); }
-    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Result panel */
+.result-card {
+  background: var(--color-surface-offset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
 
-    .geofence-status-row {
-      display: flex; align-items: center; gap: var(--space-2);
-      padding: var(--space-2) var(--space-3);
-      background: var(--color-surface-2); border-radius: var(--radius-md);
-      border: 1px solid var(--color-border);
-      margin-top: var(--space-3);
-    }
-    .geofence-status-row .label { font-size: var(--text-xs); color: var(--color-text-muted); flex: 1; }
-    .geofence-status-row .value { font-size: var(--text-xs); font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; }
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-dynamic);
+  border-bottom: 1px solid var(--color-border);
+}
 
-    /* ── ANI/ALI ── */
-    .textarea-code {
-      width: 100%; padding: var(--space-3);
-      background: var(--color-bg); border: 1px solid var(--color-border);
-      border-radius: var(--radius-md); font-size: 11px; font-family: 'Courier New', monospace;
-      color: var(--color-text); resize: vertical; min-height: 110px; line-height: 1.55;
-      transition: border-color var(--transition-ui);
-    }
-    .textarea-code:focus { outline: none; border-color: var(--color-primary); }
-    .sample-btns { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
-    .btn-chip {
-      font-size: 11px; padding: 2px var(--space-2); border-radius: var(--radius-full);
-      background: var(--color-primary-bg); color: var(--color-primary);
-      border: none; cursor: pointer; font-weight: 600;
-      transition: background var(--transition-ui);
-    }
-    .btn-chip:hover { background: var(--color-primary-surface); }
+.result-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
 
-    /* ── Result Card ── */
-    .result-card {
-      border-radius: var(--radius-lg); border: 1px solid var(--color-border);
-      background: var(--color-surface-2); overflow: hidden;
-      box-shadow: var(--shadow-sm);
-    }
-    .result-card-header {
-      padding: var(--space-3) var(--space-4);
-      background: var(--color-surface-offset);
-      border-bottom: 1px solid var(--color-divider);
-      display: flex; align-items: center; gap: var(--space-2);
-      font-size: var(--text-xs); font-weight: 700; color: var(--color-text-muted);
-      text-transform: uppercase; letter-spacing: 0.07em;
-    }
-    .result-card-body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.result-body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
 
-    .result-row { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); }
-    .result-key { font-size: var(--text-xs); color: var(--color-text-muted); font-weight: 500; flex-shrink: 0; }
-    .result-val { font-size: var(--text-xs); color: var(--color-text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; word-break: break-all; }
-    .result-val.mono { font-family: 'Courier New', monospace; font-weight: 500; }
+/* Data rows */
+.data-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.data-key {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  min-width: 64px;
+  padding-top: 1px;
+  flex-shrink: 0;
+}
+.data-val {
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+.data-val.highlight {
+  color: var(--color-primary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
 
-    .w3w-words {
-      font-size: var(--text-base); font-weight: 700; color: var(--color-primary);
-      letter-spacing: -0.01em; display: flex; align-items: center; gap: var(--space-1);
-      flex-wrap: wrap;
-    }
-    .w3w-prefix { color: var(--color-error); font-size: var(--text-lg); line-height: 1; }
+/* Status badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.badge-inside  { background: var(--color-success-highlight); color: var(--color-success); border: 1px solid color-mix(in oklch, var(--color-success) 25%, transparent); }
+.badge-outside { background: var(--color-error-highlight);   color: var(--color-error);   border: 1px solid color-mix(in oklch, var(--color-error)   25%, transparent); }
+.badge-neutral { background: var(--color-surface-dynamic);   color: var(--color-text-muted); border: 1px solid var(--color-border); }
 
-    .fence-verdict {
-      display: flex; align-items: center; gap: var(--space-2);
-      padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-md);
-      font-size: var(--text-sm); font-weight: 700;
-    }
-    .fence-verdict.inside {
-      background: var(--color-success-bg); color: var(--color-success-text);
-      border: 1px solid color-mix(in oklch, var(--color-success) 30%, transparent);
-    }
-    .fence-verdict.outside {
-      background: var(--color-error-bg); color: var(--color-error-text);
-      border: 1px solid color-mix(in oklch, var(--color-error) 30%, transparent);
-    }
-    .fence-verdict.pending {
-      background: var(--color-surface-offset); color: var(--color-text-muted);
-      border: 1px solid var(--color-border);
-    }
-    .verdict-icon { font-size: 1.1em; }
+/* Event log */
+.event-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 160px;
+  overflow-y: auto;
+}
+.event-log::-webkit-scrollbar { width: 3px; }
+.event-log::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
 
-    /* ── Word Grid ── */
-    .word-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-      gap: var(--space-1); max-height: 160px; overflow-y: auto;
-    }
-    .word-chip {
-      font-size: 10px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm);
-      background: var(--color-primary-bg); color: var(--color-primary);
-      font-family: 'Courier New', monospace; font-weight: 600; white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis; border: none;
-      cursor: default; text-align: left;
-    }
-    .word-grid::-webkit-scrollbar { width: 3px; }
-    .word-grid::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+.event-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  animation: slideIn 0.2s ease;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.event-time {
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.event-msg {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+.event-item.event-success .event-msg { color: var(--color-success); }
+.event-item.event-error   .event-msg { color: var(--color-error);   }
+.event-item.event-info    .event-msg { color: var(--color-primary);  }
 
-    /* ── Event Log ── */
-    .event-log { display: flex; flex-direction: column; gap: 0; max-height: 180px; overflow-y: auto; }
-    .event-log::-webkit-scrollbar { width: 3px; }
-    .event-log::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
-    .event-entry {
-      display: grid; grid-template-columns: 62px 1fr;
-      gap: var(--space-2); padding: var(--space-2) 0;
-      border-bottom: 1px solid var(--color-divider); align-items: start;
-    }
-    .event-entry:last-child { border-bottom: none; }
-    .event-time { font-size: 10px; font-family: 'Courier New', monospace; color: var(--color-text-faint); padding-top: 1px; }
-    .event-msg { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.4; }
-    .event-msg strong { color: var(--color-text); font-weight: 600; }
-    .event-msg .tag-inside { color: var(--color-success); font-weight: 700; }
-    .event-msg .tag-outside { color: var(--color-error); font-weight: 700; }
+/* w3w word list */
+.word-list-wrap {
+  max-height: 140px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-offset);
+}
+.word-list-wrap::-webkit-scrollbar { width: 3px; }
+.word-list-wrap::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
 
-    /* ── Map ── */
-    .map-panel { position: relative; display: flex; flex-direction: column; overflow: hidden; }
-    #map { flex: 1; }
-    .map-overlay-top {
-      position: absolute; top: var(--space-3); right: var(--space-3);
-      display: flex; flex-direction: column; gap: var(--space-2); z-index: 500; pointer-events: none;
-    }
-    .map-pill {
-      background: var(--color-surface); border: 1px solid var(--color-border);
-      border-radius: var(--radius-full); padding: var(--space-1) var(--space-3);
-      font-size: var(--text-xs); font-weight: 600; color: var(--color-text);
-      box-shadow: var(--shadow-md); white-space: nowrap; pointer-events: auto;
-      display: flex; align-items: center; gap: var(--space-2);
-    }
-    .map-pill .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-    .map-pill .dot.active { background: var(--color-success); }
-    .map-pill .dot.inactive { background: var(--color-text-faint); }
+.word-list {
+  list-style: none;
+  padding: var(--space-1);
+}
+.word-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  transition: background var(--transition-interactive), color var(--transition-interactive);
+}
+.word-list li:hover { background: var(--color-surface-dynamic); color: var(--color-text); }
+.word-list li.current { background: var(--color-primary-highlight); color: var(--color-primary); font-weight: 600; }
+.word-list li::before {
+  content: '///';
+  color: var(--color-text-faint);
+  font-size: 10px;
+  letter-spacing: -0.05em;
+}
+.word-list-empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
 
-    /* ── Empty states ── */
-    .empty-hint {
-      padding: var(--space-4) var(--space-3); text-align: center;
-      color: var(--color-text-faint); font-size: var(--text-xs);
-      border: 1px dashed var(--color-border); border-radius: var(--radius-md);
-    }
+/* ===================== MAP PANEL ===================== */
+.map-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  position: relative;
+}
 
-    /* ── Responsive ── */
-    @media (max-width: 768px) {
-      .app-body { grid-template-columns: 1fr; grid-template-rows: auto 400px; }
-      .left-panel { overflow-y: auto; border-right: none; border-bottom: 1px solid var(--color-border); }
-    }
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  z-index: 10;
+}
 
-    a, button, input, textarea, select {
-      transition: color var(--transition-ui), background var(--transition-ui),
-                  border-color var(--transition-ui), box-shadow var(--transition-ui);
-    }
-    :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: var(--radius-sm); }
+.map-coord-display {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  background: var(--color-surface-offset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  letter-spacing: 0.02em;
+}
 
-    /* Leaflet draw toolbar polish */
-    .leaflet-draw-toolbar a { border-radius: var(--radius-sm) !important; }
-    .leaflet-touch .leaflet-draw-toolbar a { width: 30px !important; height: 30px !important; line-height: 30px !important; }
-  </style>
+#map {
+  flex: 1;
+  z-index: 1;
+}
+
+/* Leaflet custom dark overrides */
+[data-theme="dark"] .leaflet-tile { filter: brightness(0.85) saturate(0.9); }
+[data-theme="dark"] .leaflet-control-zoom a { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+[data-theme="dark"] .leaflet-control-zoom a:hover { background: var(--color-surface-offset); }
+[data-theme="dark"] .leaflet-control-attribution { background: color-mix(in oklch, var(--color-surface) 80%, transparent); color: var(--color-text-faint); }
+[data-theme="dark"] .leaflet-draw-toolbar a { background-color: var(--color-surface) !important; color: var(--color-text) !important; border-color: var(--color-border) !important; }
+
+/* Map overlay info */
+.map-overlay {
+  position: absolute;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  z-index: 50;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-lg);
+  min-width: 200px;
+}
+.overlay-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-2);
+}
+.overlay-w3w {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.overlay-w3w::before { content: '/// '; color: var(--color-text-faint); font-size: var(--text-xs); }
+.overlay-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* Divider */
+.divider { height: 1px; background: var(--color-divider); margin: 0; }
+
+/* Empty state */
+.empty-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+.empty-hint svg { opacity: 0.4; }
+
+/* Sample payload selector */
+.sample-select {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-offset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  transition: border-color var(--transition-interactive);
+}
+.sample-select:focus { outline: none; border-color: var(--color-primary); }
+[data-theme="dark"] .sample-select option { background: var(--color-surface-2); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .main-content { grid-template-columns: 1fr; grid-template-rows: 1fr 320px; }
+  .sidebar { order: 2; }
+  .map-panel { order: 1; }
+  .map-overlay { display: none; }
+}
+</style>
 </head>
 <body>
+
 <div class="app-shell">
 
-  <!-- Header -->
-  <header class="app-header">
-    <a class="app-logo" href="#" aria-label="W3W Dispatcher">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M3 11l19-9-9 19-2-8-8-2z"/>
+  <!-- TOPBAR -->
+  <header class="topbar" role="banner">
+    <div class="logo-mark" aria-label="W3W Geofence Dispatcher">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polygon points="3 11 22 2 13 21 11 13 3 11"/>
       </svg>
-      W3W Dispatcher
-    </a>
-    <span class="header-badge">Lab</span>
-    <div class="header-spacer"></div>
-    <div class="header-status">
-      <span class="status-dot"></span>
-      <span id="hdr-fence-status">No fence</span>
+      <span class="logo-text">W3W Geofence <span>Dispatcher</span></span>
     </div>
-    <button class="btn-icon" data-theme-toggle aria-label="Toggle dark mode">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-    </button>
+    <div class="topbar-center">
+      <div class="status-dot" id="globalStatusDot" aria-hidden="true"></div>
+      <span class="status-label" id="globalStatusLabel">IDLE — no fence active</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-icon" data-theme-toggle aria-label="Toggle dark mode" title="Toggle theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
   </header>
 
-  <!-- Body -->
-  <div class="app-body">
+  <!-- MAIN -->
+  <div class="main-content">
 
-    <!-- Left panel -->
-    <aside class="left-panel" aria-label="Controls">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" role="complementary" aria-label="Controls">
 
       <!-- API Key -->
-      <div class="panel-section">
-        <div class="section-label">what3words API</div>
-        <div class="field-row">
-          <label class="field-label" for="apiKey">API Key</label>
-          <input id="apiKey" class="field-input" type="password" placeholder="Paste your W3W API key…" autocomplete="off" spellcheck="false"/>
+      <div class="sidebar-section">
+        <p class="section-label">what3words API Key</p>
+        <div class="input-row">
+          <input type="password" id="apiKey" class="input-field" placeholder="Enter your W3W API key…" autocomplete="off" aria-label="what3words API key">
+          <button class="btn btn-secondary btn-sm" id="saveKey" title="Save key">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
         </div>
       </div>
 
       <!-- Geofence -->
-      <div class="panel-section">
-        <div class="section-label">Geofence</div>
-        <div class="btn-group">
-          <button class="btn btn-primary" id="btnRect">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-            Rectangle
+      <div class="sidebar-section">
+        <p class="section-label">Geofence</p>
+        <div class="tool-group">
+          <button class="tool-btn" id="btnRect" title="Draw rectangle geofence">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+            Draw Rectangle
           </button>
-          <button class="btn btn-primary" id="btnPoly">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 22 20 2 20"/></svg>
-            Polygon
+          <button class="tool-btn" id="btnPoly" title="Draw polygon geofence">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/></svg>
+            Draw Polygon
           </button>
-          <button class="btn btn-danger" id="btnClearFence">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            Clear
+          <button class="tool-btn btn-danger" id="btnClear" title="Clear geofence">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+            Clear Fence
           </button>
-        </div>
-        <div class="geofence-status-row">
-          <span class="label">Status</span>
-          <span class="value" id="fenceStatusText">Not set</span>
-        </div>
-        <div id="wordListSection" style="margin-top:var(--space-3); display:none;">
-          <div class="section-label" style="margin-bottom:var(--space-2);">W3W cells in fence</div>
-          <div id="wordGrid" class="word-grid"></div>
-          <div id="wordListMsg" style="margin-top:var(--space-2); font-size:10px; color:var(--color-text-faint);"></div>
         </div>
       </div>
 
       <!-- ANI/ALI -->
-      <div class="panel-section">
-        <div class="section-label">ANI / ALI Payload</div>
-        <textarea id="aliPayload" class="textarea-code" spellcheck="false" placeholder="Paste mock ANI/ALI data here…"></textarea>
-        <div class="sample-btns">
-          <button class="btn-chip" data-sample="inside">Sample: Inside</button>
-          <button class="btn-chip" data-sample="outside">Sample: Outside</button>
-          <button class="btn-chip" data-sample="e911">Sample: E911</button>
-        </div>
-        <div style="margin-top:var(--space-3);">
-          <button class="btn btn-primary" id="btnProcess" style="width:100%; justify-content:center;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            Process Payload
+      <div class="sidebar-section">
+        <p class="section-label">Mock ANI / ALI Payload</p>
+        <select class="sample-select" id="sampleSelect" aria-label="Load sample payload">
+          <option value="">— Load a sample payload —</option>
+          <option value="basic">Basic LAT/LON</option>
+          <option value="ani_ali">ANI/ALI Format</option>
+          <option value="e911">E911 Extended</option>
+          <option value="pidf_lo">PIDF-LO Style</option>
+        </select>
+        <textarea id="aliPayload" class="textarea-field" placeholder="Paste ANI/ALI data here, or load a sample above…" aria-label="ANI/ALI payload input"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnProcess">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Process
           </button>
+          <button class="btn btn-ghost btn-sm" id="btnClearPayload">Clear</button>
         </div>
       </div>
 
       <!-- Result -->
-      <div class="panel-section" id="resultSection">
-        <div class="section-label">Last Result</div>
-        <div id="resultEmpty" class="empty-hint">Process a payload to see results</div>
-        <div id="resultCard" class="result-card" style="display:none;">
-          <div class="result-card-header">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-            Decoded Location
+      <div class="sidebar-section">
+        <p class="section-label">Call Result</p>
+        <div class="result-card" id="resultCard">
+          <div class="result-header">
+            <span class="result-title">Parsed Data</span>
+            <span class="badge badge-neutral" id="fenceStatus">—</span>
           </div>
-          <div class="result-card-body">
-            <div class="result-row">
-              <span class="result-key">Coordinates</span>
-              <span class="result-val mono" id="rCoords">—</span>
-            </div>
-            <div class="result-row">
-              <span class="result-key">ANI</span>
-              <span class="result-val" id="rANI">—</span>
-            </div>
-            <div class="result-row">
-              <span class="result-key">Address</span>
-              <span class="result-val" id="rAddr">—</span>
-            </div>
-            <div>
-              <div class="result-key" style="margin-bottom:var(--space-2);">what3words</div>
-              <div class="w3w-words" id="rW3W">
-                <span class="w3w-prefix">//</span><span id="rW3WText">—</span>
-              </div>
-            </div>
-            <div id="rVerdict" class="fence-verdict pending">
-              <span class="verdict-icon">⬡</span>
-              <span id="rVerdictText">Draw a geofence to check</span>
+          <div class="result-body" id="resultBody">
+            <div class="empty-hint">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>Process a payload to see results</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- W3W Words -->
+      <div class="sidebar-section">
+        <p class="section-label">W3W Addresses in Fence</p>
+        <div id="wordListWrap" class="word-list-wrap">
+          <p class="word-list-empty">Draw a geofence to enumerate addresses</p>
+        </div>
+        <div class="btn-row" style="margin-top:var(--space-2)">
+          <button class="btn btn-secondary btn-sm" id="btnListWords" title="Enumerate W3W addresses in fence">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            Enumerate Addresses
+          </button>
         </div>
       </div>
 
       <!-- Event Log -->
-      <div class="panel-section">
-        <div class="section-label">Event Log</div>
-        <div id="eventLog" class="event-log">
-          <div class="empty-hint">No events yet</div>
-        </div>
+      <div class="sidebar-section" style="flex:1">
+        <p class="section-label">Event Log</p>
+        <div class="event-log" id="eventLog" role="log" aria-live="polite" aria-label="Event log"></div>
       </div>
 
     </aside>
 
-    <!-- Map panel -->
-    <main class="map-panel">
-      <div id="map"></div>
-      <div class="map-overlay-top">
-        <div class="map-pill">
-          <span class="dot" id="fenceDot" style="background:var(--color-text-faint)"></span>
-          <span id="mapFenceLabel">No geofence</span>
-        </div>
-        <div class="map-pill" id="mapPinPill" style="display:none;">
-          <span class="dot active"></span>
-          <span id="mapPinLabel">Pin dropped</span>
+    <!-- MAP PANEL -->
+    <main class="map-panel" role="main">
+      <div class="map-toolbar" role="toolbar" aria-label="Map info bar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="var(--color-text-faint)" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+        <span class="map-coord-display" id="mapCoordDisplay">— , —</span>
+        <span style="margin-left:auto;font-size:var(--text-xs);color:var(--color-text-faint)">Click map to update cursor position</span>
+      </div>
+      <div id="map" aria-label="Interactive geofence map"></div>
+
+      <!-- Floating overlay -->
+      <div class="map-overlay" id="mapOverlay" style="display:none;" role="status" aria-live="polite" aria-label="Pin result">
+        <p class="overlay-title">Active Pin</p>
+        <p class="overlay-w3w" id="overlayW3w">—</p>
+        <div class="overlay-status-row">
+          <span class="badge badge-neutral" id="overlayBadge">—</span>
+          <span style="font-size:var(--text-xs);color:var(--color-text-faint)" id="overlayCoord"></span>
         </div>
       </div>
     </main>
+
   </div>
 </div>
 
 <script>
+// ===================== THEME TOGGLE =====================
 (function(){
-  // ── Theme toggle ──
-  const themeToggle = document.querySelector('[data-theme-toggle]');
-  const root = document.documentElement;
-  let theme = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
-  root.setAttribute('data-theme', theme);
-  function setToggleIcon() {
-    themeToggle.innerHTML = theme === 'dark'
-      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
-      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-  }
-  setToggleIcon();
-  themeToggle.addEventListener('click', () => {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', theme);
-    setToggleIcon();
+  const t = document.querySelector('[data-theme-toggle]');
+  const r = document.documentElement;
+  let d = 'dark'; // default dark for dispatch console
+  r.setAttribute('data-theme', d);
+  if (t) t.addEventListener('click', () => {
+    d = d === 'dark' ? 'light' : 'dark';
+    r.setAttribute('data-theme', d);
+    t.setAttribute('aria-label', 'Switch to ' + (d === 'dark' ? 'light' : 'dark') + ' mode');
+    t.innerHTML = d === 'dark'
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
   });
+})();
 
-  // ── Map init ──
-  const map = L.map('map').setView([35.07, -85.25], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
-    maxZoom: 19
+// ===================== STATE =====================
+let w3wApiKey = '';
+let geofenceLayer = null;
+let pinMarker = null;
+let currentPin = null;
+let drawHandler = null;
+
+// ===================== MAP INIT =====================
+const map = L.map('map', { center: [35.05, -85.35], zoom: 13, zoomControl: true });
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+  maxZoom: 20
+}).addTo(map);
+
+map.on('mousemove', (e) => {
+  document.getElementById('mapCoordDisplay').textContent =
+    e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6);
+});
+
+// Draw control
+const drawnItems = new L.FeatureGroup().addTo(map);
+const drawControl = new L.Control.Draw({
+  edit: { featureGroup: drawnItems, remove: false },
+  draw: { marker: false, circle: false, circlemarker: false, polyline: false, polygon: false, rectangle: false }
+});
+
+map.on(L.Draw.Event.CREATED, (e) => {
+  drawnItems.clearLayers();
+  geofenceLayer = e.layer;
+  drawnItems.addLayer(geofenceLayer);
+  stopDrawing();
+  updateGlobalStatus('active', 'FENCE ACTIVE — ready to process');
+  logEvent('Geofence drawn and active', 'success');
+  document.getElementById('btnClear').style.color = 'var(--color-error)';
+  if (currentPin) checkPinFence(currentPin.lat, currentPin.lng);
+});
+
+function stopDrawing() {
+  if (drawHandler) { drawHandler.disable(); drawHandler = null; }
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+}
+
+// ===================== GEOFENCE TOOLS =====================
+document.getElementById('btnRect').addEventListener('click', () => {
+  stopDrawing();
+  document.getElementById('btnRect').classList.add('active');
+  drawHandler = new L.Draw.Rectangle(map, {
+    shapeOptions: { color: '#2f81f7', weight: 2, fillOpacity: 0.1 }
+  });
+  drawHandler.enable();
+  logEvent('Rectangle draw mode — click and drag on map', 'info');
+});
+
+document.getElementById('btnPoly').addEventListener('click', () => {
+  stopDrawing();
+  document.getElementById('btnPoly').classList.add('active');
+  drawHandler = new L.Draw.Polygon(map, {
+    shapeOptions: { color: '#2f81f7', weight: 2, fillOpacity: 0.1 },
+    showArea: true
+  });
+  drawHandler.enable();
+  logEvent('Polygon draw mode — click to place vertices, double-click to close', 'info');
+});
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  stopDrawing();
+  drawnItems.clearLayers();
+  geofenceLayer = null;
+  if (pinMarker) { map.removeLayer(pinMarker); pinMarker = null; }
+  currentPin = null;
+  document.getElementById('mapOverlay').style.display = 'none';
+  resetResultCard();
+  clearWordList();
+  updateGlobalStatus('', 'IDLE — no fence active');
+  logEvent('Geofence cleared', '');
+});
+
+// ===================== API KEY =====================
+document.getElementById('saveKey').addEventListener('click', () => {
+  w3wApiKey = document.getElementById('apiKey').value.trim();
+  if (w3wApiKey) logEvent('API key saved', 'success');
+  else logEvent('API key cleared', '');
+});
+
+// ===================== SAMPLE PAYLOADS =====================
+const SAMPLES = {
+  basic: `LAT=35.0527\nLON=-85.3117\nANI=4235550199\nNAME=John Doe`,
+  ani_ali: `ANI: 423-555-0142\nALI:\n  NAME: Jane Smith\n  ADDR: 123 Main St, Jasper TN\n  LAT: 35.0651\n  LON: -85.3042\n  CLASS: WIRELESS`,
+  e911: `CALL_ID: E911-2024-00421\nANI: 4235550199\nCB_NUM: 4235550199\nLAT: 35.0490\nLONG: -85.3250\nUNCERTAINTY: 50m\nHEIGHT: 312m\nCALL_TYPE: WIRELESS\nCARRIER: AT&T`,
+  pidf_lo: `<presence>\n  <device>\n    <geopriv>\n      <location-info>\n        <Point>\n          <pos>35.0600 -85.3180</pos>\n        </Point>\n      </location-info>\n    </geopriv>\n  </device>\n</presence>`
+};
+
+document.getElementById('sampleSelect').addEventListener('change', (e) => {
+  if (e.target.value && SAMPLES[e.target.value]) {
+    document.getElementById('aliPayload').value = SAMPLES[e.target.value];
+    logEvent('Loaded sample: ' + e.target.value, 'info');
+  }
+});
+
+document.getElementById('btnClearPayload').addEventListener('click', () => {
+  document.getElementById('aliPayload').value = '';
+  document.getElementById('sampleSelect').value = '';
+});
+
+// ===================== PARSE PAYLOAD =====================
+function parseLatLon(text) {
+  // PIDF-LO <pos> tag
+  let m = text.match(/<pos>\s*([-\d.]+)\s+([-\d.]+)\s*<\/pos>/i);
+  if (m) return { lat: parseFloat(m[1]), lon: parseFloat(m[2]), source: 'PIDF-LO <pos>' };
+
+  // LAT= / LAT: variants (also LONG=)
+  const latM  = text.match(/\bLAT(?:ITUDE)?\s*[=:]\s*([-\d.]+)/i);
+  const lonM  = text.match(/\bLO(?:N|NG|NGITUDE)?\s*[=:]\s*([-\d.]+)/i);
+  if (latM && lonM) return { lat: parseFloat(latM[1]), lon: parseFloat(lonM[1]), source: 'LAT/LON fields' };
+
+  // bare decimal pair: 35.xxxx -85.xxxx
+  const pairM = text.match(/([-]?\d{1,3}\.\d{4,})\s*[,\s]\s*([-]?\d{1,3}\.\d{4,})/);
+  if (pairM) return { lat: parseFloat(pairM[1]), lon: parseFloat(pairM[2]), source: 'coordinate pair' };
+
+  return null;
+}
+
+// ===================== PROCESS PAYLOAD =====================
+document.getElementById('btnProcess').addEventListener('click', async () => {
+  const text = document.getElementById('aliPayload').value.trim();
+  if (!text) { logEvent('No payload to process', ''); return; }
+
+  const coords = parseLatLon(text);
+  if (!coords) {
+    logEvent('Could not extract coordinates from payload', 'error');
+    return;
+  }
+
+  logEvent(`Coordinates extracted (${coords.source}): ${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}`, 'info');
+
+  // Drop pin
+  currentPin = { lat: coords.lat, lng: coords.lon };
+  if (pinMarker) map.removeLayer(pinMarker);
+  pinMarker = L.marker([coords.lat, coords.lon], {
+    icon: L.divIcon({
+      className: '',
+      html: `<div style="
+        width:14px;height:14px;
+        background:var(--color-primary);
+        border:2px solid #fff;
+        border-radius:50%;
+        box-shadow:0 0 0 3px color-mix(in oklch,var(--color-primary) 30%,transparent),0 2px 8px rgba(0,0,0,0.5)
+      "></div>`,
+      iconSize: [14,14], iconAnchor: [7,7]
+    })
   }).addTo(map);
+  map.setView([coords.lat, coords.lon], Math.max(map.getZoom(), 15));
 
-  const drawnItems = new L.FeatureGroup().addTo(map);
-  const drawControl = new L.Control.Draw({
-    edit: { featureGroup: drawnItems, remove: false },
-    draw: {
-      rectangle: { shapeOptions: { color: '#0891b2', weight: 2, fillOpacity: 0.08 } },
-      polygon: { shapeOptions: { color: '#0891b2', weight: 2, fillOpacity: 0.08 } },
-      circle: false, circlemarker: false, marker: false, polyline: false
-    }
-  });
-  map.addControl(drawControl);
-
-  let currentFence = null;
-  let currentPin = null;
-  let drawingMode = null;
-  let logEntries = [];
-
-  // ── Draw buttons ──
-  document.getElementById('btnRect').addEventListener('click', () => {
-    drawingMode = 'rect';
-    new L.Draw.Rectangle(map, drawControl.options.draw.rectangle).enable();
-  });
-  document.getElementById('btnPoly').addEventListener('click', () => {
-    drawingMode = 'poly';
-    new L.Draw.Polygon(map, drawControl.options.draw.polygon).enable();
-  });
-
-  map.on(L.Draw.Event.CREATED, e => {
-    drawnItems.clearLayers();
-    if (currentPin) { map.removeLayer(currentPin); currentPin = null; }
-    currentFence = e.layer;
-    drawnItems.addLayer(currentFence);
-    updateFenceUI(true);
-    logEvent('Geofence drawn', `Type: <strong>${e.layerType}</strong>`);
-    if (document.getElementById('apiKey').value.trim()) fetchWordGrid();
-  });
-
-  document.getElementById('btnClearFence').addEventListener('click', () => {
-    drawnItems.clearLayers();
-    currentFence = null;
-    if (currentPin) { map.removeLayer(currentPin); currentPin = null; }
-    updateFenceUI(false);
-    document.getElementById('wordListSection').style.display = 'none';
-    document.getElementById('rVerdict').className = 'fence-verdict pending';
-    document.getElementById('rVerdictText').textContent = 'Draw a geofence to check';
-    logEvent('Fence cleared', 'Geofence removed');
-  });
-
-  function updateFenceUI(active) {
-    const label = active ? 'Fence active' : 'No geofence';
-    document.getElementById('fenceStatusText').textContent = active ? 'Active' : 'Not set';
-    document.getElementById('hdr-fence-status').textContent = label;
-    document.getElementById('fenceDot').style.background = active ? 'var(--color-success)' : 'var(--color-text-faint)';
-    document.getElementById('mapFenceLabel').textContent = label;
+  // Lookup W3W
+  let w3wAddr = '(API key required)';
+  if (w3wApiKey) {
+    try {
+      const url = `https://api.what3words.com/v3/convert-to-3wa?coordinates=${coords.lat}%2C${coords.lon}&language=en&format=json&key=${w3wApiKey}`;
+      const r = await fetch(url);
+      const d = await r.json();
+      if (d.words) { w3wAddr = d.words; logEvent(`W3W address: ///${d.words}`, 'success'); }
+      else { w3wAddr = d.error?.message || 'API error'; logEvent('W3W lookup failed: ' + w3wAddr, 'error'); }
+    } catch(e) { w3wAddr = 'Network error'; logEvent('W3W fetch error: ' + e.message, 'error'); }
+  } else {
+    logEvent('No API key set — W3W lookup skipped', '');
   }
 
-  // ── Word grid ──
-  async function fetchWordGrid() {
-    const key = document.getElementById('apiKey').value.trim();
-    if (!key || !currentFence) return;
-    const bounds = currentFence.getBounds ? currentFence.getBounds() : L.featureGroup([currentFence]).getBounds();
-    const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
-    const latRange = Math.abs(ne.lat - sw.lat);
-    const lngRange = Math.abs(ne.lng - sw.lng);
-    const approxCells = Math.round((latRange / 0.000027) * (lngRange / 0.000036));
-    if (approxCells > 500) {
-      document.getElementById('wordListSection').style.display = 'block';
-      document.getElementById('wordGrid').innerHTML = '';
-      document.getElementById('wordListMsg').textContent = `Fence too large (~${approxCells.toLocaleString()} cells). Zoom in for cell listing.`;
-      return;
-    }
+  // Fence check
+  checkPinFence(coords.lat, coords.lon, w3wAddr, coords);
+});
+
+function checkPinFence(lat, lng, w3wAddr, coords) {
+  const inside = geofenceLayer ? isInsideFence(lat, lng) : null;
+
+  // Update result card
+  const body = document.getElementById('resultBody');
+  const badge = document.getElementById('fenceStatus');
+  const w3wDisplay = w3wAddr || (currentPin ? '(process payload first)' : '—');
+
+  body.innerHTML = `
+    <div class="data-row">
+      <span class="data-key">lat</span>
+      <span class="data-val">${lat.toFixed(6)}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-key">lon</span>
+      <span class="data-val">${lng.toFixed(6)}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-key">source</span>
+      <span class="data-val">${coords ? coords.source : '—'}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-key">w3w</span>
+      <span class="data-val highlight">${w3wDisplay}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-key">fence</span>
+      <span class="data-val">
+        ${inside === null
+          ? '<span class="badge badge-neutral">No fence drawn</span>'
+          : inside
+            ? '<span class="badge badge-inside">✓ INSIDE</span>'
+            : '<span class="badge badge-outside">✗ OUTSIDE</span>'
+        }
+      </span>
+    </div>
+  `;
+
+  if (inside === null) {
+    badge.className = 'badge badge-neutral'; badge.textContent = '—';
+  } else if (inside) {
+    badge.className = 'badge badge-inside'; badge.textContent = '✓ IN';
+    updateGlobalStatus('active', 'INSIDE FENCE — ' + (w3wAddr || lat.toFixed(4)));
+    logEvent('Pin is INSIDE the geofence', 'success');
+  } else {
+    badge.className = 'badge badge-outside'; badge.textContent = '✗ OUT';
+    updateGlobalStatus('alert', 'OUTSIDE FENCE — ' + (w3wAddr || lat.toFixed(4)));
+    logEvent('Pin is OUTSIDE the geofence', 'error');
+  }
+
+  // Map overlay
+  const overlay = document.getElementById('mapOverlay');
+  overlay.style.display = 'block';
+  document.getElementById('overlayW3w').textContent = w3wAddr || '—';
+  document.getElementById('overlayCoord').textContent = lat.toFixed(4) + ', ' + lng.toFixed(4);
+  const ob = document.getElementById('overlayBadge');
+  if (inside === null) { ob.className='badge badge-neutral'; ob.textContent='No fence'; }
+  else if (inside)     { ob.className='badge badge-inside';  ob.textContent='✓ Inside'; }
+  else                 { ob.className='badge badge-outside'; ob.textContent='✗ Outside'; }
+}
+
+// ===================== FENCE CHECK =====================
+function isInsideFence(lat, lng) {
+  if (!geofenceLayer) return false;
+  const pt = L.latLng(lat, lng);
+  const bounds = geofenceLayer.getBounds ? geofenceLayer.getBounds() : null;
+  if (bounds && geofenceLayer instanceof L.Rectangle) return bounds.contains(pt);
+  // Polygon PIP
+  if (geofenceLayer.getLatLngs) {
+    const poly = geofenceLayer.getLatLngs()[0];
+    return pointInPolygon([lat, lng], poly.map(p => [p.lat, p.lng]));
+  }
+  return false;
+}
+
+function pointInPolygon(point, polygon) {
+  const [px, py] = point;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i], [xj, yj] = polygon[j];
+    if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+// ===================== W3W WORD LISTING =====================
+document.getElementById('btnListWords').addEventListener('click', async () => {
+  if (!geofenceLayer) { logEvent('Draw a geofence first', ''); return; }
+  if (!w3wApiKey)     { logEvent('Set a W3W API key first', 'error'); return; }
+
+  const bounds = geofenceLayer.getBounds();
+  const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+  const latSpan = ne.lat - sw.lat, lngSpan = ne.lng - sw.lng;
+  const approxCells = Math.round((latSpan / 0.000027) * (lngSpan / 0.000027));
+
+  if (approxCells > 500) {
+    logEvent(`Fence too large (~${approxCells.toLocaleString()} cells). Zoom in for enumeration.`, 'error');
+    return;
+  }
+
+  logEvent(`Enumerating W3W addresses (~${approxCells} cells)…`, 'info');
+  const wrap = document.getElementById('wordListWrap');
+  wrap.innerHTML = '<p class="word-list-empty">Loading…</p>';
+
+  try {
+    const url = `https://api.what3words.com/v3/grid-section?bounding-box=${sw.lat}%2C${sw.lng}%2C${ne.lat}%2C${ne.lng}&format=json&key=${w3wApiKey}`;
+    const res = await fetch(url); const data = await res.json();
+    if (!data.lines) { throw new Error(data.error?.message || 'No grid data'); }
+
+    // Sample internal points from grid
     const step = 0.000027;
     const words = [];
-    const wg = document.getElementById('wordGrid');
-    wg.innerHTML = '<div style="color:var(--color-text-faint);font-size:10px;padding:4px;">Fetching cells…</div>';
-    document.getElementById('wordListSection').style.display = 'block';
-    for (let lat = sw.lat; lat <= ne.lat && words.length < 300; lat += step) {
-      for (let lng = sw.lng; lng <= ne.lng && words.length < 300; lng += step) {
-        const latR = Math.round(lat * 1e6) / 1e6;
-        const lngR = Math.round(lng * 1e6) / 1e6;
-        try {
-          const res = await fetch(`https://api.what3words.com/v3/convert-to-3wa?coordinates=${latR}%2C${lngR}&key=${key}`);
-          const data = await res.json();
-          if (data.words) words.push(data.words);
-        } catch(e) {}
+    const latSteps = Math.max(1, Math.round(latSpan / step));
+    const lngSteps = Math.max(1, Math.round(lngSpan / step));
+    const sampleEvery = Math.max(1, Math.floor(Math.max(latSteps, lngSteps) / 12));
+
+    const pts = [];
+    for (let i = 0; i <= latSteps; i += sampleEvery) {
+      for (let j = 0; j <= lngSteps; j += sampleEvery) {
+        const lat = sw.lat + i * step, lng = sw.lng + j * step;
+        if (isInsideFence(lat, lng)) pts.push([lat, lng]);
       }
     }
-    wg.innerHTML = '';
-    if (!words.length) {
-      wg.innerHTML = '<div class="empty-hint">No cells returned. Check API key.</div>';
-    } else {
-      words.forEach(w => {
-        const el = document.createElement('div');
-        el.className = 'word-chip'; el.title = '///' + w; el.textContent = '///' + w;
-        wg.appendChild(el);
-      });
-      document.getElementById('wordListMsg').textContent = `${words.length} cells shown`;
+
+    for (const [lat, lng] of pts.slice(0, 30)) {
+      const r = await fetch(`https://api.what3words.com/v3/convert-to-3wa?coordinates=${lat.toFixed(6)}%2C${lng.toFixed(6)}&language=en&format=json&key=${w3wApiKey}`);
+      const d = await r.json();
+      if (d.words && !words.includes(d.words)) words.push(d.words);
     }
-  }
 
-  // ── Sample payloads ──
-  const samples = {
-    inside: `ANI: +14235550101\nALI_LAT: 35.0700\nALI_LON: -85.2500\nADDRESS: 123 Main St, Chattanooga TN 37402\nCALL_TYPE: 911\nTIMESTAMP: ${new Date().toISOString()}`,
-    outside: `ANI: +14235550202\nALI_LAT: 35.1100\nALI_LON: -85.3000\nADDRESS: 456 Ridge Rd, Chattanooga TN 37411\nCALL_TYPE: 911\nTIMESTAMP: ${new Date().toISOString()}`,
-    e911: `MSAG_COMMUNITY: JASPER\nANI: +14235559911\nLAT: 35.0726\nLON: -85.2601\nCONFIDENCE: 8\nSTREET: 789 Oak Ave\nCITY: Jasper\nSTATE: TN\nZIP: 37347\nCALL_TIME: ${new Date().toISOString()}`
-  };
-  document.querySelectorAll('[data-sample]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.getElementById('aliPayload').value = samples[btn.dataset.sample];
-    });
-  });
+    if (!words.length) { wrap.innerHTML='<p class="word-list-empty">No W3W addresses found in fence</p>'; return; }
 
-  // ── Parse payload ──
-  function parsePayload(text) {
-    const latMatch = text.match(/(?:ALI_LAT|LAT)\s*[=:]\s*([-\d.]+)/i);
-    const lonMatch = text.match(/(?:ALI_LON|LON)\s*[=:]\s*([-\d.]+)/i);
-    const aniMatch = text.match(/ANI\s*[=:]\s*([^\n]+)/i);
-    const addrMatch = text.match(/(?:ADDRESS|STREET)\s*[=:]\s*([^\n]+)/i);
-    return {
-      lat: latMatch ? parseFloat(latMatch[1]) : null,
-      lon: lonMatch ? parseFloat(lonMatch[1]) : null,
-      ani: aniMatch ? aniMatch[1].trim() : 'Unknown',
-      address: addrMatch ? addrMatch[1].trim() : 'Not provided'
-    };
-  }
-
-  // ── Point-in-polygon ──
-  function pointInFence(lat, lng) {
-    if (!currentFence) return null;
-    if (currentFence.getBounds) {
-      const b = currentFence.getBounds();
-      if (b.contains && b.contains([lat, lng])) {
-        if (currentFence.getLatLngs) {
-          return pointInPolygon({ lat, lng }, currentFence.getLatLngs()[0]);
-        }
-        return true;
+    const ul = document.createElement('ul'); ul.className = 'word-list'; ul.setAttribute('role','list');
+    words.forEach(w => {
+      const li = document.createElement('li');
+      li.textContent = w;
+      if (currentPin) {
+        const res = document.getElementById('overlayW3w').textContent;
+        if (res === w) li.classList.add('current');
       }
-      return false;
-    }
-    return null;
-  }
-
-  function pointInPolygon(pt, poly) {
-    let inside = false;
-    const pts = poly.map ? poly : Array.from(poly);
-    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-      const xi = pts[i].lat, yi = pts[i].lng;
-      const xj = pts[j].lat, yj = pts[j].lng;
-      const intersect = ((yi > pt.lng) !== (yj > pt.lng)) && (pt.lat < (xj - xi) * (pt.lng - yi) / (yj - yi) + xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-
-  // ── Process ──
-  document.getElementById('btnProcess').addEventListener('click', async () => {
-    const text = document.getElementById('aliPayload').value.trim();
-    if (!text) { logEvent('Error', 'No payload entered'); return; }
-    const parsed = parsePayload(text);
-    if (!parsed.lat || !parsed.lon) { logEvent('Parse error', 'Could not extract coordinates'); return; }
-
-    // Drop pin
-    if (currentPin) map.removeLayer(currentPin);
-    const pinIcon = L.divIcon({
-      className: '', iconSize: [24, 36], iconAnchor: [12, 36],
-      html: `<svg width="24" height="36" viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24C24 5.37 18.63 0 12 0z" fill="#dc2626"/>
-        <circle cx="12" cy="12" r="5" fill="white"/>
-      </svg>`
+      ul.appendChild(li);
     });
-    currentPin = L.marker([parsed.lat, parsed.lon], { icon: pinIcon }).addTo(map);
-    map.setView([parsed.lat, parsed.lon], 16);
-
-    document.getElementById('mapPinPill').style.display = 'flex';
-    document.getElementById('mapPinLabel').textContent = `${parsed.lat.toFixed(5)}, ${parsed.lon.toFixed(5)}`;
-
-    // W3W lookup
-    let w3wText = '—';
-    const key = document.getElementById('apiKey').value.trim();
-    if (key) {
-      try {
-        const res = await fetch(`https://api.what3words.com/v3/convert-to-3wa?coordinates=${parsed.lat}%2C${parsed.lon}&key=${key}`);
-        const data = await res.json();
-        if (data.words) w3wText = data.words;
-        else if (data.error) w3wText = `Error: ${data.error.message}`;
-      } catch(e) { w3wText = 'Network error'; }
-    } else {
-      w3wText = 'No API key';
-    }
-
-    // Fence check
-    const inside = pointInFence(parsed.lat, parsed.lon);
-    const verdictEl = document.getElementById('rVerdict');
-    const verdictTxt = document.getElementById('rVerdictText');
-    if (inside === null) {
-      verdictEl.className = 'fence-verdict pending';
-      verdictEl.querySelector('.verdict-icon').textContent = '⬡';
-      verdictTxt.textContent = 'No geofence drawn';
-    } else if (inside) {
-      verdictEl.className = 'fence-verdict inside';
-      verdictEl.querySelector('.verdict-icon').textContent = '✓';
-      verdictTxt.textContent = 'Inside geofence';
-      currentPin.bindPopup('<b style="color:#16a34a">✓ Inside geofence</b><br>' + w3wText).openPopup();
-    } else {
-      verdictEl.className = 'fence-verdict outside';
-      verdictEl.querySelector('.verdict-icon').textContent = '✕';
-      verdictTxt.textContent = 'Outside geofence';
-      currentPin.bindPopup('<b style="color:#dc2626">✕ Outside geofence</b><br>' + w3wText).openPopup();
-    }
-
-    // Update result card
-    document.getElementById('resultEmpty').style.display = 'none';
-    document.getElementById('resultCard').style.display = 'block';
-    document.getElementById('rCoords').textContent = `${parsed.lat}, ${parsed.lon}`;
-    document.getElementById('rANI').textContent = parsed.ani;
-    document.getElementById('rAddr').textContent = parsed.address;
-    document.getElementById('rW3WText').textContent = w3wText !== '—' ? w3wText : '—';
-
-    const verdict = inside === null ? 'No fence' : inside ? '✓ INSIDE' : '✕ OUTSIDE';
-    const tagClass = inside === null ? '' : inside ? 'tag-inside' : 'tag-outside';
-    logEvent('Payload processed', `ANI <strong>${parsed.ani}</strong> → <strong>${parsed.lat.toFixed(5)}, ${parsed.lon.toFixed(5)}</strong> → <span class="${tagClass}">${verdict}</span>`);
-  });
-
-  // ── Log ──
-  function logEvent(title, detail) {
-    const now = new Date();
-    const time = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    logEntries.unshift({ time, title, detail });
-    renderLog();
+    wrap.innerHTML = ''; wrap.appendChild(ul);
+    logEvent(`Enumerated ${words.length} W3W address(es) in fence`, 'success');
+  } catch(e) {
+    wrap.innerHTML = '<p class="word-list-empty">Error: ' + e.message + '</p>';
+    logEvent('W3W grid error: ' + e.message, 'error');
   }
-  function renderLog() {
-    const el = document.getElementById('eventLog');
-    if (!logEntries.length) { el.innerHTML = '<div class="empty-hint">No events yet</div>'; return; }
-    el.innerHTML = logEntries.slice(0, 30).map(e => `
-      <div class="event-entry">
-        <span class="event-time">${e.time}</span>
-        <span class="event-msg"><strong>${e.title}</strong> — ${e.detail}</span>
-      </div>`).join('');
-  }
+});
 
-  logEvent('App ready', 'Draw a geofence, then process an ANI/ALI payload');
-})();
+// ===================== HELPERS =====================
+function updateGlobalStatus(type, text) {
+  const dot = document.getElementById('globalStatusDot');
+  const label = document.getElementById('globalStatusLabel');
+  dot.className = 'status-dot' + (type ? ' ' + type : '');
+  label.textContent = text;
+}
+
+function logEvent(msg, type) {
+  const log = document.getElementById('eventLog');
+  const item = document.createElement('div');
+  item.className = 'event-item' + (type ? ' event-' + type : '');
+  const now = new Date();
+  item.innerHTML = `
+    <span class="event-time">${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}</span>
+    <span class="event-msg">${msg}</span>
+  `;
+  log.insertBefore(item, log.firstChild);
+  if (log.children.length > 50) log.removeChild(log.lastChild);
+}
+
+function resetResultCard() {
+  document.getElementById('resultBody').innerHTML = `
+    <div class="empty-hint">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>Process a payload to see results</span>
+    </div>`;
+  const b = document.getElementById('fenceStatus');
+  b.className = 'badge badge-neutral'; b.textContent = '—';
+}
+
+function clearWordList() {
+  document.getElementById('wordListWrap').innerHTML = '<p class="word-list-empty">Draw a geofence to enumerate addresses</p>';
+}
+
+// Initial log
+logEvent('Dispatcher console ready', 'info');
+updateGlobalStatus('', 'IDLE — no fence active');
 </script>
 </body>
 </html>
